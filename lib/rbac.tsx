@@ -74,7 +74,7 @@ export function RbacProvider({ children }: { children: ReactNode }) {
   const can = useCallback(
     (moduleKey: string, action: string) => {
       if (moduleKey === '__PUBLIC__' || action === '__PUBLIC__') return true;
-      return permissionSet.has(`${moduleKey}:${action}`);
+      return permissionSet.has(`${moduleKey}:${action.toLowerCase()}`);
     },
     [permissionSet]
   );

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import PermissionGuard from '@/components/security/PermissionGuard';
 import PermissionMatrix from '@/components/security/PermissionMatrix';
+import RolePermissionEditor from '@/components/security/RolePermissionEditor';
 import { securityService } from '@/services/securityService';
 import {
   EffectivePermission,
@@ -13,13 +14,16 @@ import {
   SecurityRole,
   SecurityUser,
 } from '@/types/security';
-import { Check, Plus, RefreshCw, Save, Shield, Trash2, UserPlus, X } from 'lucide-react';
+import { SidebarMenuRow } from '@/types/navigation';
+import { Check, Plus, RefreshCw, Shield, Trash2, UserPlus, X } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
 import { useRbac } from '@/lib/rbac';
 import { FormInput, FormTextarea, FormSelect, FormButton } from '@/components/forms/FormElements';
+import { navigationService } from '@/services/navigationService';
+import MenuManagement from '@/components/security/MenuManagement';
 
 export default function SecurityPage() {
-  const [activeTab, setActiveTab] = useState<'roles' | 'matrix' | 'assignment' | 'audit'>('roles');
+  const [activeTab, setActiveTab] = useState<'roles' | 'assignment' | 'menus' | 'audit'>('roles');
   const [registry, setRegistry] = useState<ModuleRegistryResponse>({ modules: [], actions: [] });
   const [roles, setRoles] = useState<SecurityRole[]>([]);
   const [users, setUsers] = useState<SecurityUser[]>([]);
@@ -29,12 +33,18 @@ export default function SecurityPage() {
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [newRole, setNewRole] = useState({ roleName: '', description: '' });
+  const [roleForm, setRoleForm] = useState({ roleName: '', description: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-  const { allowed: canCreateSecurity } = usePermission('SECURITY', 'CREATE');
-  const { allowed: canUpdateSecurity } = usePermission('SECURITY', 'UPDATE');
-  const { allowed: canDeleteSecurity } = usePermission('SECURITY', 'DELETE');
+
+  const [menus, setMenus] = useState<SidebarMenuRow[]>([]);
+  const [editingMenu, setEditingMenu] = useState<SidebarMenuRow | null>(null);
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const { allowed: canCreateSecurity } = usePermission('users.role_management', 'create');
+  const { allowed: canUpdateSecurity } = usePermission('users.role_management', 'update');
+  const { allowed: canDeleteSecurity } = usePermission('users.role_management', 'delete');
+  const { allowed: canUpdateMenus } = usePermission('system.navigation', 'update');
   const { refreshRbac } = useRbac();
 
   const selectedRole = useMemo(() => roles.find((role) => role.id === selectedRoleId), [roles, selectedRoleId]);
@@ -47,6 +57,14 @@ export default function SecurityPage() {
   useEffect(() => {
     if (selectedRoleId) loadMatrix(selectedRoleId);
   }, [selectedRoleId]);
+
+  useEffect(() => {
+    if (!selectedRole) return;
+    setRoleForm({
+      roleName: selectedRole.role_name,
+      description: selectedRole.description || '',
+    });
+  }, [selectedRole]);
 
   useEffect(() => {
     if (selectedUserId) loadEffectivePermissions(selectedUserId);
@@ -68,10 +86,20 @@ export default function SecurityPage() {
       setAuditLogs(logs);
       setSelectedRoleId((current) => current || roleData[0]?.id || '');
       setSelectedUserId((current) => current || userData[0]?.id || '');
+      await loadMenus();
     } catch (error: any) {
       setMessage(error.message || 'Failed to load security data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMenus = async () => {
+    try {
+      const data = await navigationService.getAllMenus();
+      setMenus(data);
+    } catch (error: any) {
+      console.error('Failed to load menus:', error);
     }
   };
 
@@ -132,6 +160,13 @@ export default function SecurityPage() {
 
     try {
       setSaving(true);
+      if (selectedRole && !selectedRole.is_system_role) {
+        await securityService.updateRole(selectedRoleId, {
+          roleName: roleForm.roleName,
+          description: roleForm.description,
+          isActive: selectedRole.is_active,
+        });
+      }
       await securityService.updateRoleMatrix(
         selectedRoleId,
         matrix.map((permission) => ({ permissionId: (permission.permission_id || permission.id) as string, allowed: Boolean(permission.allowed) }))
@@ -182,14 +217,14 @@ export default function SecurityPage() {
 
   const tabs = [
     { id: 'roles', label: 'Roles' },
-    { id: 'matrix', label: 'Permission Matrix' },
     { id: 'assignment', label: 'Role Assignment' },
+    ...(canUpdateMenus ? [{ id: 'menus', label: 'Menu Management' } as const] : []),
     { id: 'audit', label: 'Audit Logs' },
   ] as const;
 
   return (
     <DashboardLayout>
-      <PermissionGuard moduleKey="SECURITY" action="VIEW">
+      <PermissionGuard moduleKey="users.role_management" action="read">
         <div className="p-6 space-y-6 bg-slate-50 min-h-[calc(100vh-4rem)]">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -235,107 +270,85 @@ export default function SecurityPage() {
           ) : (
             <>
               {activeTab === 'roles' && (
-                <div className={`grid gap-6 ${canCreateSecurity ? 'lg:grid-cols-[360px_1fr]' : 'lg:grid-cols-1'}`}>
-                  {canCreateSecurity && (
-                    <form onSubmit={handleCreateRole} className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm h-fit">
-                      <div className="flex items-center gap-2 text-slate-900">
-                        <Shield size={18} className="text-emerald-600" />
-                        <h2 className="font-semibold">Create Role</h2>
-                      </div>
-                      <FormInput
-                        label="Role Name"
-                        value={newRole.roleName}
-                        onChange={(event) => setNewRole({ ...newRole, roleName: event.target.value })}
-                        placeholder="e.g. Fleet Supervisor"
-                      />
-                      <FormTextarea
-                        label="Description"
-                        value={newRole.description}
-                        onChange={(event) => setNewRole({ ...newRole, description: event.target.value })}
-                        placeholder="What this role is for"
-                      />
-                      <FormButton type="submit" loading={saving} loadingText="Creating...">
-                        <span className="inline-flex items-center gap-2">
-                          <Plus size={16} />
-                          Create Role
-                        </span>
-                      </FormButton>
-                    </form>
-                  )}
-
-                  <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-500">
-                        <tr>
-                          <th className="px-4 py-3 text-left">Role</th>
-                          <th className="px-4 py-3 text-left">Type</th>
-                          <th className="px-4 py-3 text-left">Status</th>
-                          <th className="px-4 py-3 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {roles.map((role) => (
-                          <tr key={role.id} className="hover:bg-emerald-50/40 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="font-medium text-slate-900">{role.role_name}</div>
-                              <div className="text-slate-500">{role.description || 'No description'}</div>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500">{role.is_system_role ? 'System' : 'Custom'}</td>
-                            <td className="px-4 py-3">
-                              {role.is_active ? (
-                                <span className="text-emerald-600 font-medium">Active</span>
-                              ) : (
-                                <span className="text-slate-400">Inactive</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {canDeleteSecurity && (
-                                <button
-                                  onClick={() => handleDeleteRole(role)}
-                                  disabled={role.is_system_role || saving}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30 transition-colors"
-                                  title="Delete role"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'matrix' && (
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <FormSelect
-                      value={selectedRoleId}
-                      onChange={(event) => setSelectedRoleId(event.target.value)}
-                      className="md:max-w-xs"
-                    >
-                      {roles.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.role_name}
-                        </option>
-                      ))}
-                    </FormSelect>
-                    {canUpdateSecurity && (
-                      <FormButton
-                        onClick={handleSaveMatrix}
-                        disabled={saving || !selectedRole}
-                        className="md:w-auto px-4"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <Save size={16} />
-                          Save Matrix
-                        </span>
-                      </FormButton>
+                <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+                  <div className="space-y-4">
+                    {canCreateSecurity && (
+                      <form onSubmit={handleCreateRole} className="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center gap-2 text-slate-900">
+                          <Shield size={18} className="text-emerald-600" />
+                          <h2 className="font-semibold">Create Role</h2>
+                        </div>
+                        <FormInput
+                          label="Role Name"
+                          value={newRole.roleName}
+                          onChange={(event) => setNewRole({ ...newRole, roleName: event.target.value })}
+                          placeholder="e.g. Fleet Supervisor"
+                        />
+                        <FormTextarea
+                          label="Description"
+                          value={newRole.description}
+                          onChange={(event) => setNewRole({ ...newRole, description: event.target.value })}
+                          placeholder="What this role is for"
+                        />
+                        <FormButton type="submit" loading={saving} loadingText="Creating...">
+                          <span className="inline-flex items-center gap-2">
+                            <Plus size={16} />
+                            Create Role
+                          </span>
+                        </FormButton>
+                      </form>
                     )}
+
+                    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="px-2 pb-2 text-sm font-semibold text-slate-900">Role List</div>
+                      <div className="space-y-1">
+                        {roles.map((role) => (
+                          <button
+                            key={role.id}
+                            type="button"
+                            onClick={() => setSelectedRoleId(role.id)}
+                            className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition-colors ${
+                              selectedRoleId === role.id
+                                ? 'bg-emerald-50 text-emerald-800'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>
+                              <span className="block font-medium">{role.role_name}</span>
+                              <span className="text-xs text-slate-500">{role.is_system_role ? 'System role' : 'Custom role'}</span>
+                            </span>
+                            {canDeleteSecurity && !role.is_system_role && (
+                              <span
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteRole(role);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                title="Delete role"
+                              >
+                                <Trash2 size={16} />
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <PermissionMatrix permissions={matrix} actions={registry.actions} editable={canUpdateSecurity} onChange={handleMatrixChange} />
+
+                  <RolePermissionEditor
+                    role={selectedRole || null}
+                    roleName={roleForm.roleName}
+                    description={roleForm.description}
+                    modules={registry.modules}
+                    actions={registry.actions}
+                    permissions={matrix}
+                    editable={canUpdateSecurity}
+                    saving={saving}
+                    onRoleNameChange={(roleName) => setRoleForm((current) => ({ ...current, roleName }))}
+                    onDescriptionChange={(description) => setRoleForm((current) => ({ ...current, description }))}
+                    onPermissionChange={handleMatrixChange}
+                    onSave={handleSaveMatrix}
+                  />
                 </div>
               )}
 
@@ -414,6 +427,21 @@ export default function SecurityPage() {
                     />
                   </div>
                 </div>
+              )}
+
+              {activeTab === 'menus' && canUpdateMenus && (
+                <MenuManagement
+                  menus={menus}
+                  permissions={registry.modules}
+                  onRefresh={loadMenus}
+                  editingMenu={editingMenu}
+                  setEditingMenu={setEditingMenu}
+                  expandedMenus={expandedMenus}
+                  setExpandedMenus={setExpandedMenus}
+                  saving={saving}
+                  setSaving={setSaving}
+                  setMessage={setMessage}
+                />
               )}
 
               {activeTab === 'audit' && (

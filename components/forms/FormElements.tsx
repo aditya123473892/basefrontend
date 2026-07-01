@@ -8,6 +8,7 @@ import {
   ButtonHTMLAttributes,
   ReactNode,
 } from 'react';
+import { LucideIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Global form building blocks.
@@ -24,10 +25,11 @@ import {
 interface FormInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
+  icon?: LucideIcon;
 }
 
 export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
-  ({ label, error, id, className = '', ...props }, ref) => {
+  ({ label, error, id, className = '', icon: Icon, ...props }, ref) => {
     const inputId = id ?? props.name ?? label.toLowerCase().replace(/\s+/g, '-');
 
     return (
@@ -38,15 +40,19 @@ export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
         >
           {label}
         </label>
-        <input
-          ref={ref}
-          id={inputId}
-          className={`w-full px-4 py-3 bg-white border rounded-lg text-slate-900 placeholder-slate-400
-            focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all
-            ${error ? 'border-red-400' : 'border-slate-300'}
-            ${className}`}
-          {...props}
-        />
+        <div className="relative">
+          {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />}
+          <input
+            ref={ref}
+            id={inputId}
+            className={`w-full bg-white border rounded-lg text-slate-900 placeholder-slate-400
+              focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all
+              ${Icon ? 'pl-10 pr-4' : 'px-4'} py-3
+              ${error ? 'border-red-400' : 'border-slate-300'}
+              ${className}`}
+            {...props}
+          />
+        </div>
         {error && <p className="mt-1.5 text-xs text-red-500">{error}</p>}
       </div>
     );

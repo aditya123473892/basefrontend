@@ -30,7 +30,7 @@ const fleetStats: StatCardData[] = [
     icon: Car,
     trend: '+5%',
     trendUp: true,
-    permission: { module: 'VEHICLES', action: 'VIEW' },
+    permission: { module: 'transport.vehicles', action: 'read' },
   },
   {
     id: 'vehicles-in-use',
@@ -40,7 +40,7 @@ const fleetStats: StatCardData[] = [
     icon: Truck,
     trend: '-2%',
     trendUp: false,
-    permission: { module: 'VEHICLES', action: 'VIEW' },
+    permission: { module: 'transport.vehicles', action: 'read' },
   },
   {
     id: 'drivers-available',
@@ -50,7 +50,7 @@ const fleetStats: StatCardData[] = [
     icon: Users,
     trend: '+8%',
     trendUp: true,
-    permission: { module: 'DRIVERS', action: 'VIEW' },
+    permission: { module: 'transport.drivers', action: 'read' },
   },
   {
     id: 'drivers-on-trip',
@@ -60,7 +60,7 @@ const fleetStats: StatCardData[] = [
     icon: MapPin,
     trend: '+3%',
     trendUp: true,
-    permission: { module: 'TRIPS', action: 'VIEW' },
+    permission: { module: 'transport.trips', action: 'read' },
   },
 ];
 
@@ -71,7 +71,7 @@ const financialStats: StatCardData[] = [
     value: '₹2,45,000',
     count: '12 invoices',
     icon: FileText,
-    permission: { module: 'BILLINGS', action: 'VIEW' },
+    permission: { module: 'finance.reports', action: 'read' },
   },
   {
     id: 'invoices-month',
@@ -79,7 +79,7 @@ const financialStats: StatCardData[] = [
     value: '₹45,67,800',
     count: '156 invoices',
     icon: TrendingUp,
-    permission: { module: 'BILLINGS', action: 'VIEW' },
+    permission: { module: 'finance.reports', action: 'read' },
   },
   {
     id: 'pending-gst',
@@ -87,7 +87,7 @@ const financialStats: StatCardData[] = [
     value: '23',
     count: '₹8,45,200',
     icon: FileWarning,
-    permission: { module: 'BILLINGS', action: 'VIEW' },
+    permission: { module: 'finance.reports', action: 'read' },
   },
   {
     id: 'paid-vs-unpaid',
@@ -95,7 +95,7 @@ const financialStats: StatCardData[] = [
     value: '₹32.5L / ₹13.2L',
     count: '71% collected',
     icon: DollarSign,
-    permission: { module: 'BILLINGS', action: 'VIEW' },
+    permission: { module: 'finance.reports', action: 'read' },
   },
 ];
 
@@ -105,28 +105,28 @@ const activities: ActivityItemData[] = [
     action: 'New trip started',
     details: 'Vehicle MH-12-AB-1234 • Driver: Rajesh Kumar',
     time: '5 min ago',
-    permission: { module: 'TRIPS', action: 'VIEW' },
+    permission: { module: 'transport.trips', action: 'read' },
   },
   {
     id: 'act-2',
     action: 'Invoice generated',
     details: 'INV-2024-0156 • ₹45,200',
     time: '12 min ago',
-    permission: { module: 'BILLINGS', action: 'VIEW' },
+    permission: { module: 'finance.reports', action: 'read' },
   },
   {
     id: 'act-3',
     action: 'Vehicle maintenance due',
     details: 'Vehicle GJ-01-XY-5678',
     time: '1 hour ago',
-    permission: { module: 'VEHICLES', action: 'VIEW' },
+    permission: { module: 'transport.vehicles', action: 'read' },
   },
   {
     id: 'act-4',
     action: 'Trip completed',
     details: 'Vehicle DL-08-CD-9012 • Distance: 245 km',
     time: '2 hours ago',
-    permission: { module: 'TRIPS', action: 'VIEW' },
+    permission: { module: 'transport.trips', action: 'read' },
   },
 ];
 

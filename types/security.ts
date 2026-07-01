@@ -57,6 +57,20 @@ export interface SecurityAuditLog {
 }
 
 export interface ModuleRegistryResponse {
-  modules: Array<{ moduleKey: string; moduleName: string }>;
+  modules: PermissionModule[];
   actions: string[];
+}
+
+export interface PermissionNode {
+  key: string;
+  label: string;
+  path?: string;
+  isGroup?: boolean;
+  children?: PermissionNode[];
+}
+
+export interface PermissionModule {
+  moduleKey: string;
+  moduleLabel: string;
+  children: PermissionNode[];
 }
