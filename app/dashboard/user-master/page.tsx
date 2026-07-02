@@ -5,7 +5,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Plus, Edit, Trash2, ChevronDown, X, Save, User as UserIcon, Mail, Shield } from 'lucide-react';
 import { User, CreateUserData, UpdateUserData } from '@/types/user';
 import { userService } from '@/services/userService';
-import AlertModal from '@/components/ui/AlertModal';
 import { securityService } from '@/services/securityService';
 import { SecurityRole } from '@/types/security';
 import PermissionGuard from '@/components/security/PermissionGuard';
@@ -14,7 +13,9 @@ import PageHeader from '@/components/common/PageHeader';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SearchBar from '@/components/common/SearchBar';
 import ActionButtons from '@/components/common/ActionButtons';
-import { FormInput, FormSelect, FormButton } from '@/components/forms/FormElements';
+import { FormInput, FormButton } from '@/components/forms/FormElements';
+import { useToast } from '@/hooks/useToast';
+import AlertModal from '@/components/ui/AlertModal';
 
 export default function UserMasterPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -28,6 +29,7 @@ export default function UserMasterPage() {
   const { allowed: canCreateUsers } = usePermission('users.user_management', 'create');
   const { allowed: canUpdateUsers } = usePermission('users.user_management', 'update');
   const { allowed: canDeleteUsers } = usePermission('users.user_management', 'delete');
+  const toast = useToast();
 
   // Form states
   const [createForm, setCreateForm] = useState<CreateUserData>({
@@ -71,6 +73,7 @@ export default function UserMasterPage() {
       setRoles(roleData);
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      toast.error('Failed to fetch data', 'Please try again later');
     } finally {
       setLoading(false);
     }
@@ -121,23 +124,92 @@ export default function UserMasterPage() {
     setShowEditModal(true);
   };
 
-  const toggleCreateRole = (roleId: string) => {
-    const current = createForm.roleIds || [];
-    setCreateForm({
-      ...createForm,
-      roleIds: current.includes(roleId)
-        ? current.filter(id => id !== roleId)
-        : [...current, roleId],
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.email || !createForm.full_name || !createForm.password) {
+      toast.warning('Validation Error', 'Please fill in all required fields');
+      return;
+    }
+
+    if (createForm.roleIds.length === 0) {
+      toast.warning('Validation Error', 'Please select at least one role');
+      return;
+    }
+
+    // One user - one role constraint
+    if (createForm.roleIds.length > 1) {
+      toast.warning('Validation Error', 'A user can have only one role');
+      return;
+    }
+
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm User Creation',
+      message: `Are you sure you want to create user "${createForm.full_name}" with role "${roles.find(r => r.id === createForm.roleIds[0])?.role_name}"?`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await userService.createUser(createForm);
+          setShowCreateModal(false);
+          setCreateForm({
+            email: '',
+            full_name: '',
+            password: '',
+            role: 'USER',
+            roleIds: []
+          });
+          await fetchUsers();
+          toast.success('User created successfully!');
+        } catch (error) {
+          console.error('Failed to create user:', error);
+          toast.error('Failed to create user', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Create User',
+      showCancel: true
     });
   };
 
-  const toggleEditRole = (roleId: string) => {
-    const current = editForm.roleIds || [];
-    setEditForm({
-      ...editForm,
-      roleIds: current.includes(roleId)
-        ? current.filter(id => id !== roleId)
-        : [...current, roleId],
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+
+    if (editForm.roleIds.length === 0) {
+      toast.warning('Validation Error', 'Please select at least one role');
+      return;
+    }
+
+    // One user - one role constraint
+    if (editForm.roleIds.length > 1) {
+      toast.warning('Validation Error', 'A user can have only one role');
+      return;
+    }
+
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm User Update',
+      message: `Are you sure you want to update user "${selectedUser.full_name}"? This will change their role to "${roles.find(r => r.id === editForm.roleIds[0])?.role_name}".`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await userService.updateUser(selectedUser.id, editForm);
+          setShowEditModal(false);
+          setSelectedUser(null);
+          await fetchUsers();
+          toast.success('User updated successfully!');
+        } catch (error) {
+          console.error('Failed to update user:', error);
+          toast.error('Failed to update user', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Save Changes',
+      showCancel: true
     });
   };
 
@@ -154,26 +226,10 @@ export default function UserMasterPage() {
         try {
           await userService.deleteUser(userId);
           await fetchUsers();
-          setAlertModal({
-            isOpen: true,
-            type: 'success',
-            title: 'Success',
-            message: 'User deleted successfully!',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.success('User deleted successfully!');
         } catch (error) {
           console.error('Failed to delete user:', error);
-          setAlertModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Error',
-            message: 'Failed to delete user. Please try again.',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.error('Failed to delete user', 'Please try again');
         }
       },
       confirmText: 'Delete',
@@ -181,90 +237,37 @@ export default function UserMasterPage() {
     });
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.email || !createForm.full_name || !createForm.password) {
-      setAlertModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Validation Error',
-        message: 'Please fill in all required fields',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-      return;
-    }
-
-    setFormLoading(true);
-    try {
-      await userService.createUser(createForm);
-      setShowCreateModal(false);
+  const toggleCreateRole = (roleId: string) => {
+    // One user - one role constraint
+    if (createForm.roleIds.includes(roleId)) {
+      const current = createForm.roleIds || [];
       setCreateForm({
-        email: '',
-        full_name: '',
-        password: '',
-        role: 'USER',
-        roleIds: []
+        ...createForm,
+        roleIds: current.filter(id => id !== roleId)
       });
-      await fetchUsers();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'User created successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
+    } else {
+      // If selecting a new role, replace the existing one
+      setCreateForm({
+        ...createForm,
+        roleIds: [roleId]
       });
-    } catch (error) {
-      console.error('Failed to create user:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to create user. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } finally {
-      setFormLoading(false);
     }
   };
 
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUser) return;
-
-    setFormLoading(true);
-    try {
-      await userService.updateUser(selectedUser.id, editForm);
-      setShowEditModal(false);
-      setSelectedUser(null);
-      await fetchUsers();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'User updated successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
+  const toggleEditRole = (roleId: string) => {
+    // One user - one role constraint
+    if (editForm.roleIds.includes(roleId)) {
+      const current = editForm.roleIds || [];
+      setEditForm({
+        ...editForm,
+        roleIds: current.filter(id => id !== roleId)
       });
-    } catch (error) {
-      console.error('Failed to update user:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to update user. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
+    } else {
+      // If selecting a new role, replace the existing one
+      setEditForm({
+        ...editForm,
+        roleIds: [roleId]
       });
-    } finally {
-      setFormLoading(false);
     }
   };
 
@@ -295,18 +298,6 @@ export default function UserMasterPage() {
                   onChange={setSearchTerm}
                   placeholder="Search users by name or email..."
                 />
-              </div>
-              <div className="md:w-64">
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-4 py-2 pr-10 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                >
-                  <option value="">All Roles</option>
-                  {roles.map(role => (
-                    <option key={role.id} value={role.role_name}>{role.role_name}</option>
-                  ))}
-                </select>
               </div>
             </div>
           </div>
@@ -420,19 +411,19 @@ export default function UserMasterPage() {
           </div>
         </div>
 
-      {/* Create User Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Create New User</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
-              >
-                <X size={20} />
-              </button>
-            </div>
+        {/* Create User Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-md shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-slate-900">Create New User</h2>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <FormInput
@@ -464,7 +455,10 @@ export default function UserMasterPage() {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Role <span className="text-red-500">*</span>
+                    <span className="text-xs text-slate-500 ml-2">(One user can have only one role)</span>
+                  </label>
                   <div className="space-y-2">
                     {roles.map(role => (
                       <label key={role.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -473,6 +467,7 @@ export default function UserMasterPage() {
                           checked={(createForm.roleIds || []).includes(role.id)}
                           onChange={() => toggleCreateRole(role.id)}
                           className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          disabled={(createForm.roleIds || []).length > 0 && !(createForm.roleIds || []).includes(role.id)}
                         />
                         <span>{role.role_name}</span>
                       </label>
@@ -498,23 +493,23 @@ export default function UserMasterPage() {
                   </FormButton>
                 </div>
               </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-slate-900">Edit User</h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
-              >
-                <X size={20} />
-              </button>
             </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 w-full max-w-md shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-slate-900">Edit User</h2>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
               <form onSubmit={handleUpdateUser} className="space-y-4">
                 <FormInput
@@ -527,7 +522,10 @@ export default function UserMasterPage() {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Role <span className="text-red-500">*</span>
+                    <span className="text-xs text-slate-500 ml-2">(One user can have only one role)</span>
+                  </label>
                   <div className="space-y-2">
                     {roles.map(role => (
                       <label key={role.id} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -536,6 +534,7 @@ export default function UserMasterPage() {
                           checked={(editForm.roleIds || []).includes(role.id)}
                           onChange={() => toggleEditRole(role.id)}
                           className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          disabled={(editForm.roleIds || []).length > 0 && !(editForm.roleIds || []).includes(role.id)}
                         />
                         <span>{role.role_name}</span>
                       </label>
@@ -587,21 +586,21 @@ export default function UserMasterPage() {
                   </FormButton>
                 </div>
               </form>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Alert Modal */}
-      <AlertModal
-        isOpen={alertModal.isOpen}
-        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={alertModal.onConfirm}
-        title={alertModal.title}
-        message={alertModal.message}
-        type={alertModal.type}
-        confirmText={alertModal.confirmText}
-        showCancel={alertModal.showCancel}
-      />
+        {/* Alert Modal */}
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={alertModal.onConfirm}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+          confirmText={alertModal.confirmText}
+          showCancel={alertModal.showCancel}
+        />
       </PermissionGuard>
     </DashboardLayout>
   );

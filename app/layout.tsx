@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '../lib/auth'
 import { RbacProvider } from '../lib/rbac'
+import { ToastProvider } from '../hooks/useToast'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
@@ -20,7 +21,9 @@ export default function RootLayout({
       <body className="antialiased">
         <AuthProvider>
           <RbacProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </RbacProvider>
           <ToastContainer
             position="top-right"

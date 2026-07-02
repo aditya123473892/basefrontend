@@ -7,9 +7,15 @@ import SearchBar from '@/components/common/SearchBar';
 import PermissionGuard from '@/components/security/PermissionGuard';
 import { usePermission } from '@/hooks/usePermission';
 import { Plus } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
 
 export default function VehiclesPage() {
   const { allowed: canCreateVehicles } = usePermission('transport.vehicles', 'create');
+  const toast = useToast();
+
+  const handleAddVehicle = () => {
+    toast.info('Coming Soon', 'Vehicle management form will be available soon');
+  };
 
   return (
     <DashboardLayout>
@@ -22,7 +28,7 @@ export default function VehiclesPage() {
               canCreateVehicles
                 ? {
                     label: 'Add Vehicle',
-                    onClick: () => alert('Vehicle form coming soon'),
+                    onClick: handleAddVehicle,
                     icon: Plus,
                   }
                 : undefined

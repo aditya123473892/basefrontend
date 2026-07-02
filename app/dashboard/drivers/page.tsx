@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SearchBar from '@/components/common/SearchBar';
 import ActionButtons from '@/components/common/ActionButtons';
 import { FormInput, FormButton } from '@/components/forms/FormElements';
+import { useToast } from '@/hooks/useToast';
 
 export default function DriverMasterPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -24,6 +25,7 @@ export default function DriverMasterPage() {
   const { allowed: canCreateDrivers } = usePermission('transport.drivers', 'create');
   const { allowed: canUpdateDrivers } = usePermission('transport.drivers', 'update');
   const { allowed: canDeleteDrivers } = usePermission('transport.drivers', 'delete');
+  const toast = useToast();
 
   const [createForm, setCreateForm] = useState<CreateDriverData>({
     full_name: '',
@@ -48,6 +50,21 @@ export default function DriverMasterPage() {
     showCancel: false
   });
 
+  // Toast helper for non-confirm alerts
+  const showToastAlert = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    switch (type) {
+      case 'success':
+        toast.success(title, message);
+        break;
+      case 'error':
+        toast.error(title, message);
+        break;
+      case 'warning':
+        toast.warning(title, message);
+        break;
+    }
+  };
+
   useEffect(() => {
     fetchDrivers();
   }, []);
@@ -59,6 +76,7 @@ export default function DriverMasterPage() {
       setDrivers(driverData);
     } catch (error) {
       console.error('Failed to fetch drivers:', error);
+      toast.error('Failed to fetch drivers', 'Please try again later');
     } finally {
       setLoading(false);
     }
@@ -103,26 +121,10 @@ export default function DriverMasterPage() {
         try {
           await driverService.deleteDriver(driverId);
           await fetchDrivers();
-          setAlertModal({
-            isOpen: true,
-            type: 'success',
-            title: 'Success',
-            message: 'Driver deleted successfully!',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.success('Driver deleted successfully!');
         } catch (error) {
           console.error('Failed to delete driver:', error);
-          setAlertModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Error',
-            message: 'Failed to delete driver. Please try again.',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.error('Failed to delete driver', 'Please try again');
         }
       },
       confirmText: 'Delete',
@@ -133,86 +135,66 @@ export default function DriverMasterPage() {
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.full_name || !createForm.phone) {
-      setAlertModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Validation Error',
-        message: 'Please fill in all required fields',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
+      toast.warning('Validation Error', 'Please fill in all required fields');
       return;
     }
 
-    setFormLoading(true);
-    try {
-      await driverService.createDriver(createForm);
-      setShowCreateModal(false);
-      setCreateForm({
-        full_name: '',
-        phone: '',
-        license_number: ''
-      });
-      await fetchDrivers();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'Driver created successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } catch (error) {
-      console.error('Failed to create driver:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to create driver. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } finally {
-      setFormLoading(false);
-    }
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm Driver Creation',
+      message: `Are you sure you want to create driver "${createForm.full_name}"?`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await driverService.createDriver(createForm);
+          setShowCreateModal(false);
+          setCreateForm({
+            full_name: '',
+            phone: '',
+            license_number: ''
+          });
+          await fetchDrivers();
+          toast.success('Driver created successfully!');
+        } catch (error) {
+          console.error('Failed to create driver:', error);
+          toast.error('Failed to create driver', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Create Driver',
+      showCancel: true
+    });
   };
 
   const handleUpdateDriver = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDriver) return;
 
-    setFormLoading(true);
-    try {
-      await driverService.updateDriver(selectedDriver.id, editForm);
-      setShowEditModal(false);
-      setSelectedDriver(null);
-      await fetchDrivers();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'Driver updated successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } catch (error) {
-      console.error('Failed to update driver:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to update driver. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } finally {
-      setFormLoading(false);
-    }
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm Driver Update',
+      message: `Are you sure you want to update driver "${selectedDriver.full_name}"?`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await driverService.updateDriver(selectedDriver.id, editForm);
+          setShowEditModal(false);
+          setSelectedDriver(null);
+          await fetchDrivers();
+          toast.success('Driver updated successfully!');
+        } catch (error) {
+          console.error('Failed to update driver:', error);
+          toast.error('Failed to update driver', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Save Changes',
+      showCancel: true
+    });
   };
 
   return (

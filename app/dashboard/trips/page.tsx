@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner';
 import SearchBar from '@/components/common/SearchBar';
 import ActionButtons from '@/components/common/ActionButtons';
 import { FormInput, FormSelect, FormButton } from '@/components/forms/FormElements';
+import { useToast } from '@/hooks/useToast';
 
 export default function TripMasterPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -24,6 +25,7 @@ export default function TripMasterPage() {
   const { allowed: canCreateTrips } = usePermission('transport.trips', 'create');
   const { allowed: canUpdateTrips } = usePermission('transport.trips', 'update');
   const { allowed: canDeleteTrips } = usePermission('transport.trips', 'delete');
+  const toast = useToast();
 
   const [createForm, setCreateForm] = useState<CreateTripData>({
     vehicle_id: '',
@@ -66,6 +68,7 @@ export default function TripMasterPage() {
       setTrips(tripData);
     } catch (error) {
       console.error('Failed to fetch trips:', error);
+      toast.error('Failed to fetch trips', 'Please try again later');
     } finally {
       setLoading(false);
     }
@@ -125,26 +128,10 @@ export default function TripMasterPage() {
         try {
           await tripService.deleteTrip(tripId);
           await fetchTrips();
-          setAlertModal({
-            isOpen: true,
-            type: 'success',
-            title: 'Success',
-            message: 'Trip deleted successfully!',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.success('Trip deleted successfully!');
         } catch (error) {
           console.error('Failed to delete trip:', error);
-          setAlertModal({
-            isOpen: true,
-            type: 'error',
-            title: 'Error',
-            message: 'Failed to delete trip. Please try again.',
-            onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-            confirmText: 'OK',
-            showCancel: false
-          });
+          toast.error('Failed to delete trip', 'Please try again');
         }
       },
       confirmText: 'Delete',
@@ -155,90 +142,70 @@ export default function TripMasterPage() {
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.source || !createForm.destination) {
-      setAlertModal({
-        isOpen: true,
-        type: 'warning',
-        title: 'Validation Error',
-        message: 'Please fill in all required fields',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
+      toast.warning('Validation Error', 'Please fill in all required fields');
       return;
     }
 
-    setFormLoading(true);
-    try {
-      await tripService.createTrip(createForm);
-      setShowCreateModal(false);
-      setCreateForm({
-        vehicle_id: '',
-        driver_id: '',
-        source: '',
-        destination: '',
-        start_date: '',
-        end_date: '',
-        status: 'planned'
-      });
-      await fetchTrips();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'Trip created successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } catch (error) {
-      console.error('Failed to create trip:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to create trip. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } finally {
-      setFormLoading(false);
-    }
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm Trip Creation',
+      message: `Are you sure you want to create trip from "${createForm.source}" to "${createForm.destination}"?`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await tripService.createTrip(createForm);
+          setShowCreateModal(false);
+          setCreateForm({
+            vehicle_id: '',
+            driver_id: '',
+            source: '',
+            destination: '',
+            start_date: '',
+            end_date: '',
+            status: 'planned'
+          });
+          await fetchTrips();
+          toast.success('Trip created successfully!');
+        } catch (error) {
+          console.error('Failed to create trip:', error);
+          toast.error('Failed to create trip', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Create Trip',
+      showCancel: true
+    });
   };
 
   const handleUpdateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTrip) return;
 
-    setFormLoading(true);
-    try {
-      await tripService.updateTrip(selectedTrip.id, editForm);
-      setShowEditModal(false);
-      setSelectedTrip(null);
-      await fetchTrips();
-      setAlertModal({
-        isOpen: true,
-        type: 'success',
-        title: 'Success',
-        message: 'Trip updated successfully!',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } catch (error) {
-      console.error('Failed to update trip:', error);
-      setAlertModal({
-        isOpen: true,
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to update trip. Please try again.',
-        onConfirm: () => setAlertModal(prev => ({ ...prev, isOpen: false })),
-        confirmText: 'OK',
-        showCancel: false
-      });
-    } finally {
-      setFormLoading(false);
-    }
+    setAlertModal({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Confirm Trip Update',
+      message: `Are you sure you want to update trip from "${selectedTrip.source}" to "${selectedTrip.destination}"?`,
+      onConfirm: async () => {
+        setFormLoading(true);
+        try {
+          await tripService.updateTrip(selectedTrip.id, editForm);
+          setShowEditModal(false);
+          setSelectedTrip(null);
+          await fetchTrips();
+          toast.success('Trip updated successfully!');
+        } catch (error) {
+          console.error('Failed to update trip:', error);
+          toast.error('Failed to update trip', 'Please try again');
+        } finally {
+          setFormLoading(false);
+        }
+      },
+      confirmText: 'Save Changes',
+      showCancel: true
+    });
   };
 
   return (

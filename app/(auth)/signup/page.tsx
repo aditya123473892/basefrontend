@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Truck, Users, BarChart3, Shield, Zap, Globe } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { showSuccessToast, showErrorToast } from '@/lib/toast';
 import { FormInput, FormCheckbox, FormButton } from '@/components/forms/FormElements';
+import { useToast } from '@/hooks/useToast';
 
 export default function AnimatedAuthPage() {
   const { login, signup, isLoading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [isLogin, setIsLogin] = useState(false);
 
   // Login form state
@@ -54,22 +55,22 @@ export default function AnimatedAuthPage() {
       if (isLogin) {
         // Handle login
         if (!loginEmail || !loginPassword) {
-          showErrorToast('Please fill in all fields');
+          toast.error('Validation Error', 'Please fill in all fields');
           return;
         }
         const loginSuccess = await login(loginEmail, loginPassword);
         if (loginSuccess) {
-          showSuccessToast('Welcome back! Redirecting to dashboard...');
+          toast.success('Welcome back!', 'Redirecting to dashboard...');
           router.push('/dashboard');
         }
       } else {
         // Handle signup
         if (!companyName || !signupName || !signupEmail || !signupPassword) {
-          showErrorToast('Please fill in all required fields');
+          toast.error('Validation Error', 'Please fill in all required fields');
           return;
         }
         if (!agreeToTerms) {
-          showErrorToast('Please agree to the Terms of Service and Privacy Policy');
+          toast.error('Validation Error', 'Please agree to the Terms of Service and Privacy Policy');
           return;
         }
 
@@ -80,11 +81,11 @@ export default function AnimatedAuthPage() {
           password: signupPassword,
         });
 
-        showSuccessToast('Account created successfully! Welcome to Team eLogisol.');
+        toast.success('Account created successfully!', 'Welcome to Team eLogisol.');
       }
     } catch (err: any) {
       console.error('Auth error:', err);
-      showErrorToast(err.message || 'An error occurred. Please try again.');
+      toast.error(err.message || 'An error occurred', 'Please try again later');
     }
   };
 
